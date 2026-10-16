@@ -1,5 +1,5 @@
-import { mkdir, realpath } from 'fs/promises'
-import { basename, dirname, isAbsolute, join, relative, resolve } from 'path'
+import { mkdir, readlink, realpath, stat } from 'fs/promises'
+import { basename, dirname, isAbsolute, join, parse, relative, resolve, sep } from 'path'
 import type { ToolUseContext } from '../../types.js'
 
 /**
@@ -84,7 +84,13 @@ export async function resolvePathWithinCwd(
   // Resolve symlinks all the way through the candidate. For paths that do
   // not yet exist (e.g. `file_write` creating a new file), resolve the
   // longest existing prefix and re-attach the non-existent suffix.
-  const realCandidate = await realpathTolerant(candidate)
+  let realCandidate: string
+  try {
+    realCandidate = await realpathTolerant(candidate, { hops: 0 })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error'
+    return { ok: false, error: `Could not resolve path "${candidate}": ${message}` }
+  }
 
   if (!isWithin(realCandidate, realRoot)) {
     return outsideRoot(candidate, realRoot)
@@ -101,14 +107,94 @@ function isWithin(candidate: string, root: string): boolean {
   return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
 }
 
-async function realpathTolerant(path: string): Promise<string> {
+/**
+ * Bound on symlinks followed by hand, matching Linux MAXSYMLINKS. Chains that
+ * realpath walks itself are bounded by the kernel, which reports ELOOP.
+ */
+const MAX_SYMLINK_HOPS = 40
+const TOO_MANY_SYMLINKS = 'Too many levels of symbolic links'
+
+async function realpathTolerant(path: string, state: { hops: number }): Promise<string> {
   try {
-    return await realpath(path)
-  } catch {
+    const real = await realpath(path)
+    // Native realpath accepts a symlink whose target ends in a separator even
+    // when that target is a file, which the kernel refuses to open. stat takes
+    // the same lookup as open, so a failure here sends the path through the
+    // manual resolution below.
+    await stat(path)
+    return real
+  } catch (err) {
+    // The kernel already refused this chain as too long or cyclic. Following
+    // it by hand would accept a path that no fs call could open as given.
+    if ((err as NodeJS.ErrnoException).code === 'ELOOP') {
+      throw new Error(TOO_MANY_SYMLINKS)
+    }
     const parent = dirname(path)
     if (parent === path) return path
-    const realParent = await realpathTolerant(parent)
-    return join(realParent, basename(path))
+    const realParent = await realpathTolerant(parent, state)
+    const joined = join(realParent, basename(path))
+
+    // realpath also fails on a dangling symlink, which exists even though its
+    // target does not. Writing to it creates the target, so follow the link
+    // and resolve the target instead of treating the link as a new file.
+    let target: string
+    try {
+      target = await readlink(joined)
+    } catch {
+      return joined
+    }
+    if (++state.hops > MAX_SYMLINK_HOPS) {
+      throw new Error(TOO_MANY_SYMLINKS)
+    }
+    return resolveLinkTarget(realParent, target, state)
+  }
+}
+
+const TARGET_SEPARATOR = sep === '\\' ? /[\\/]/ : /\//
+
+/**
+ * Resolve a symlink target the way the kernel does: one component at a time,
+ * starting from the directory holding the link when the target is relative.
+ * `path.resolve` would collapse `a/..` lexically, but when `a` is itself a
+ * symlink the kernel steps out of the directory `a` points to instead.
+ */
+async function resolveLinkTarget(
+  linkDir: string,
+  target: string,
+  state: { hops: number },
+): Promise<string> {
+  const targetRoot = parse(target).root
+  const parts = target.slice(targetRoot.length).split(TARGET_SEPARATOR)
+  let current = targetRoot === '' ? linkDir : targetRoot
+  for (const part of parts) {
+    if (part === '' || part === '.') continue
+    if (part === '..') {
+      // `current` is symlink-free, so its lexical parent is its real parent,
+      // provided it exists. The kernel cannot step out of a missing directory.
+      await requireDirectory(current, target)
+      current = dirname(current)
+      continue
+    }
+    current = await realpathTolerant(join(current, part), state)
+  }
+  // A trailing separator or `.` names a directory, so the kernel refuses to
+  // open a file, or create one, through the link.
+  const last = parts[parts.length - 1]
+  if (last === '' || last === '.') {
+    await requireDirectory(current, target)
+  }
+  return current
+}
+
+async function requireDirectory(path: string, target: string): Promise<void> {
+  let isDirectory = false
+  try {
+    isDirectory = (await stat(path)).isDirectory()
+  } catch {
+    // Missing: rejected below.
+  }
+  if (!isDirectory) {
+    throw new Error(`Symlink target "${target}" requires "${path}" to be an existing directory`)
   }
 }
 
