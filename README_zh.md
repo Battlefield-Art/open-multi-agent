@@ -123,6 +123,7 @@ const result = await oma.runTeam(team, '找出逾期发票并起草催款提醒�
 - **[PR-Copilot](https://github.com/kidoom/PR-Copilot)**，作者 [kidoom](https://github.com/kidoom)。AI pull request 审查助手，运行 OMA 审查 team，用 `defineTool` 定义仓库上下文工具，并加入自定义 `ContextStrategy` 做 token-aware 的 diff 压缩。
 - **[StuFlow](https://github.com/znc15/StuFlow)**，作者 [znc15](https://github.com/znc15)。终端 AI 编码助手，以 OMA 为编排内核，通过 `runAgent` / `runTasks` / `runTeam` 驱动自定义 coordinator，搭配 DeepSeek。
 - **[Reports to Charts Studio](https://github.com/NARNIX0/Evident-Project)**。把文档和研究表格转换成可直接用于幻灯片的图表，使用由五个角色组成的数据提取评审组，结合结构化输出与确定性校验。
+- **[OrchestrAI](https://github.com/Kong-YiKai/OrchestrAI)**：可视化多 Agent 工作台，使用 OMA 执行任务图与互审，通过 PostgreSQL 保存检查点并支持重启恢复。
 
 **集成**
 

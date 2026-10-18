@@ -126,6 +126,7 @@ Declare `governanceIntent: 'required'` with `requiredRoles`, and the run is judg
 - **[PR-Copilot](https://github.com/kidoom/PR-Copilot)** by [kidoom](https://github.com/kidoom). AI pull-request review assistant running an OMA review team, with `defineTool` repo-context tools and a custom `ContextStrategy` for token-aware diff compression.
 - **[StuFlow](https://github.com/znc15/StuFlow)** by [znc15](https://github.com/znc15). Terminal AI coding assistant on OMA's orchestration core, driving `runAgent` / `runTasks` / `runTeam` with a custom coordinator, paired with DeepSeek.
 - **[Reports to Charts Studio](https://github.com/NARNIX0/Evident-Project)**. Turns documents and research tables into slide-ready charts, using a five-role extraction council with structured outputs and deterministic validation.
+- **[OrchestrAI](https://github.com/Kong-YiKai/OrchestrAI)**: Visual multi-agent workspace using OMA for task-graph execution and peer review, with PostgreSQL-backed checkpoints for restart recovery.
 
 **Integrations**
 
