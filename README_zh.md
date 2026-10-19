@@ -9,7 +9,7 @@
 
 <p align="center">
   <strong>Agent 的所有权、审批权与审计权，归于使用它的组织。</strong><br/>
-  OMA（Open Multi-Agent）是自托管的 TypeScript Agent 运行时：关键操作要等一条持久化、防篡改的审批，每次运行留下一份可离线逐字节核验的记录。
+  OMA（Open Multi-Agent）是自托管的 TypeScript Agent 运行时，支持多 Agent 编排、人工审批与离线运行分析。
 </p>
 
 <p align="center">
@@ -55,28 +55,29 @@ npm install @open-multi-agent/core
 ```
 
 ```typescript
-import { FileStore, OpenMultiAgent } from '@open-multi-agent/core'
+import { OpenMultiAgent } from '@open-multi-agent/core'
 
-// 密钥与端点都是你自己的：托管模型，或通过 baseURL 接本地服务。
-const oma = new OpenMultiAgent({
-  defaultProvider: 'openai',
-  defaultModel: 'gpt-5.4',
-  // 有实际副作用的工具调用（写文件、执行 shell）挂起，等待人工决定。
-  onToolCall: ({ consequential }) => (consequential ? { action: 'suspend' } : { action: 'allow' }),
+const oma = new OpenMultiAgent({ defaultProvider: 'openai', defaultModel: 'gpt-5.4' })
+
+const team = oma.createTeam('research-team', {
+  name: 'research-team',
+  agents: [
+    { name: 'researcher', systemPrompt: 'Find the relevant facts.' },
+    { name: 'analyst', systemPrompt: 'Compare evidence and identify tradeoffs.' },
+  ],
+  sharedMemory: true,
 })
 
-const team = oma.createTeam('ops', {
-  name: 'ops',
-  agents: [{ name: 'operator', systemPrompt: '核对逾期发票。', toolPreset: 'readwrite' }],
-})
+const result = await oma.runTeam(team, 'Compare three approaches and recommend one.')
 
-// checkpoint store 让整次运行和待审批请求一起持久化。
-const result = await oma.runTeam(team, '找出逾期发票并起草催款提醒。', {
-  checkpoint: { store: new FileStore('./.oma/run.json') },
-})
+// 以上代码没有声明任何任务图，任务 DAG 由 Coordinator 在运行时生成，
+// 运行结束后整个过程都是可以读回的数据。
+for (const task of result.tasks ?? []) {
+  console.log(`[${task.status}] ${task.title} → ${task.assignee ?? 'unassigned'}`, task.dependsOn)
+}
 
-// 在审批人处理 result.pendingApprovals 之前，result.status?.code 保持为 'suspended'；
-// 每条待审批请求都绑定审批人实际看到内容的哈希。
+console.log(result.agentResults.get('coordinator')?.output)
+console.log(result.totalTokenUsage)
 ```
 
 运行这段示例需要设置 `OPENAI_API_KEY`。其他云端模型、本地服务、OpenAI 兼容端点与 AI SDK provider 的配置见 [Provider 文档](docs/providers.md)。
@@ -85,21 +86,15 @@ const result = await oma.runTeam(team, '找出逾期发票并起草催款提醒�
 
 ## 持久化审批
 
-计划、任务派发和工具调用 gate 都可以返回 `suspend`。审批请求写在 checkpoint 旁边，绑定审批人实际看到内容的 SHA-256 哈希，进程重启后从这份内容继续。决定原子、先到先得；内容被篡改，或存储不支持 compare-and-set，直接失败关闭。
-
-[`approval/durable.ts`](packages/core/src/approval/durable.ts) · [`durable-approval.test.ts`](packages/core/tests/durable-approval.test.ts)（16 条）· [`durable-approval-validation.test.ts`](packages/core/tests/durable-approval-validation.test.ts)（7 条）· [文档](docs/durable-approvals.md)
+在执行计划、派发任务或调用工具前暂停，等待人工批准。配合持久化存储，进程重启后也能从已审核的内容继续执行；审批界面与通知由应用自行实现。[使用指南](docs/durable-approvals.md)
 
 ## 可核验日志
 
-接上 journal 后端，运行会记下模型看到的每个 block、每次工具调用及结果、每次上下文改写。`verifyRun()` 离线冷读整份日志，检查每个 block 引用的来源事件是否仍能逐字节复现它；日志窗口被淘汰只报"无法判定"，不算失败。它证明的是血缘与内容，不是文件从未被改过。
-
-[`journal/verify.ts`](packages/core/src/journal/verify.ts) · [`journal/hash.ts`](packages/core/src/journal/hash.ts) · [`verify-run.test.ts`](packages/core/tests/verify-run.test.ts)（11 条）· [文档](docs/run-journal.md)
+启用运行日志，记录模型收到的内容、工具调用与结果，便于运行后排查。`verifyRun()` 可离线检查记录的来源与内容是否一致；它不证明日志未被篡改。[使用指南](docs/run-journal.md)
 
 ## 治理底线
 
-声明 `governanceIntent: 'required'` 与 `requiredRoles`，运行就按执行回执判定：哪些角色真正执行、先后顺序、依赖边、是否发生独立审查。评估器拿不到 Agent 输出文本；运行可以成功结束，同时报 `unsatisfied`。
-
-[`orchestrator/governance.ts`](packages/core/src/orchestrator/governance.ts) · [`observability/execution-receipt.ts`](packages/core/src/observability/execution-receipt.ts) · [`governance-floor.test.ts`](packages/core/tests/governance-floor.test.ts)（16 条）· [文档](docs/tool-configuration.md#declared-governance-roles-in-runteam) · [执行回执](docs/observability.md#execution-receipts)
+声明必须参与的角色与执行顺序，再根据实际执行记录检查要求是否满足。运行成功不等于治理要求已满足，应用需要单独检查 `governanceConclusion`。[配置指南](docs/tool-configuration.md#declared-governance-roles-in-runteam)
 
 ## 在你自己的环境里跑
 
@@ -111,9 +106,9 @@ const result = await oma.runTeam(team, '找出逾期发票并起草催款提醒�
 
 `open-multi-agent` 2026-04-01 发布，MIT 协议。当前公开在用与集成的项目：
 
-- **[temodar-agent](https://github.com/xeloxa/temodar-agent)**，作者 [Ali Sünbül](https://github.com/xeloxa)。WordPress 安全分析平台，在 Docker runtime 里直接使用 OMA 内置工具（`bash`、`file_*`、`grep`）。已确认生产环境使用。(约 60 stars)
+- **[temodar-agent](https://github.com/xeloxa/temodar-agent)**，作者 [Ali Sünbül](https://github.com/xeloxa)。WordPress 安全分析平台，在 Docker runtime 里直接使用 OMA 内置工具（`bash`、`file_*`、`grep`）。已确认生产环境使用。
 - **[Mark Galyan](https://github.com/apollo-mg)** 在本地量化模型上完全离线运行 OMA，借助 Coordinator 与上下文压缩，在显存受限的条件下维持自治 Agent 循环持续运行。自框架发布首月起持续贡献。
-- **[Engram](https://www.engram-memory.com)**："AI 记忆的 Git"。在 agent 之间即时同步知识并标记冲突。([repo](https://github.com/Agentscreator/engram-memory)，约 80 stars)
+- **[Engram](https://www.engram-memory.com)**："AI 记忆的 Git"。在 agent 之间即时同步知识并标记冲突。([repo](https://github.com/Agentscreator/engram-memory))
 
 <details>
 <summary>更多用户与集成</summary>
@@ -146,32 +141,6 @@ const result = await oma.runTeam(team, '找出逾期发票并起草催款提醒�
 ## 可选的 Coordinator
 
 `runTeam()` 把一个目标分解为跨 Agent 的任务图。一次模型调用把目标转成带负责人和依赖关系的任务规格，确定性调度器负责执行，第二次调用基于已完成任务的输出写出最终答案。Coordinator 在运行中途不会再被咨询，运行结束后整个过程都是可以读回的数据。已经知道要做什么时，用 `runAgent()` 或 `runTasks()`。
-
-```typescript
-import { OpenMultiAgent } from '@open-multi-agent/core'
-
-const oma = new OpenMultiAgent({ defaultProvider: 'openai', defaultModel: 'gpt-5.4' })
-
-const team = oma.createTeam('research-team', {
-  name: 'research-team',
-  agents: [
-    { name: 'researcher', systemPrompt: 'Find the relevant facts.' },
-    { name: 'analyst', systemPrompt: 'Compare evidence and identify tradeoffs.' },
-  ],
-  sharedMemory: true,
-})
-
-const result = await oma.runTeam(team, 'Compare three approaches and recommend one.')
-
-// 以上代码没有声明任何任务图，任务 DAG 由 Coordinator 在运行时生成，
-// 运行结束后整个过程都是可以读回的数据。
-for (const task of result.tasks ?? []) {
-  console.log(`[${task.status}] ${task.title} → ${task.assignee ?? 'unassigned'}`, task.dependsOn)
-}
-
-console.log(result.agentResults.get('coordinator')?.output)
-console.log(result.totalTokenUsage)
-```
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/open-multi-agent/open-multi-agent/main/.github/brand/demo-dashboard-hero.gif" alt="OMA Run Viewer 回放真实运行：任务 DAG 与 span 瀑布双视图，展示每个任务的状态、负责人、token 与工具调用" width="960" height="540" loading="lazy">

@@ -9,7 +9,7 @@
 
 <p align="center">
   <strong>Agents your organization can own, approve, and audit.</strong><br/>
-  OMA (Open Multi-Agent) is a self-hosted TypeScript agent runtime: consequential actions wait for durable, tamper-evident approvals, and every run leaves a record you can verify offline, byte for byte.
+  OMA (Open Multi-Agent) is a self-hosted TypeScript agent runtime for coordinating agents, adding human approval gates, and inspecting runs offline.
 </p>
 
 <p align="center">
@@ -58,28 +58,29 @@ npm install @open-multi-agent/core
 ```
 
 ```typescript
-import { FileStore, OpenMultiAgent } from '@open-multi-agent/core'
+import { OpenMultiAgent } from '@open-multi-agent/core'
 
-// Your keys and your endpoint: a hosted provider, or a local server through baseURL.
-const oma = new OpenMultiAgent({
-  defaultProvider: 'openai',
-  defaultModel: 'gpt-5.4',
-  // Consequential tool calls (file writes, shell) pause for a human decision.
-  onToolCall: ({ consequential }) => (consequential ? { action: 'suspend' } : { action: 'allow' }),
+const oma = new OpenMultiAgent({ defaultProvider: 'openai', defaultModel: 'gpt-5.4' })
+
+const team = oma.createTeam('research-team', {
+  name: 'research-team',
+  agents: [
+    { name: 'researcher', systemPrompt: 'Find the relevant facts.' },
+    { name: 'analyst', systemPrompt: 'Compare evidence and identify tradeoffs.' },
+  ],
+  sharedMemory: true,
 })
 
-const team = oma.createTeam('ops', {
-  name: 'ops',
-  agents: [{ name: 'operator', systemPrompt: 'Reconcile overdue invoices.', toolPreset: 'readwrite' }],
-})
+const result = await oma.runTeam(team, 'Compare three approaches and recommend one.')
 
-// The checkpoint store keeps the run and its pending approvals durable.
-const result = await oma.runTeam(team, 'Find overdue invoices and draft the reminders.', {
-  checkpoint: { store: new FileStore('./.oma/run.json') },
-})
+// Nothing above declares a task graph. The coordinator planned one at runtime,
+// and the finished run is data you can read back.
+for (const task of result.tasks ?? []) {
+  console.log(`[${task.status}] ${task.title} → ${task.assignee ?? 'unassigned'}`, task.dependsOn)
+}
 
-// result.status?.code === 'suspended' until a reviewer decides result.pendingApprovals,
-// each bound to a hash of exactly what the reviewer was shown.
+console.log(result.agentResults.get('coordinator')?.output)
+console.log(result.totalTokenUsage)
 ```
 
 Set `OPENAI_API_KEY` to run this example. [Providers](docs/providers.md) covers other hosted models, local servers, OpenAI-compatible endpoints, and AI SDK providers.
@@ -88,21 +89,15 @@ Set `OPENAI_API_KEY` to run this example. [Providers](docs/providers.md) covers 
 
 ## Durable approvals
 
-A plan, task dispatch, or tool-call gate can return `suspend`. The request is stored beside the checkpoint, bound to a SHA-256 hash of exactly what the reviewer saw, and the run resumes from that content after a restart. A decision is atomic and first-wins; a tampered request or a store without compare-and-set fails closed.
-
-[`approval/durable.ts`](packages/core/src/approval/durable.ts) · [`durable-approval.test.ts`](packages/core/tests/durable-approval.test.ts) (16 cases) · [`durable-approval-validation.test.ts`](packages/core/tests/durable-approval-validation.test.ts) (7 cases) · [Guide](docs/durable-approvals.md)
+Pause before executing a plan, dispatching a task, or calling a tool for human approval. With persistent storage, a restarted process can continue from the reviewed content. Your application supplies the approval interface and notifications. [Guide](docs/durable-approvals.md)
 
 ## Verifiable journal
 
-Attach a journal backend and the run records every block the model saw, every tool call and result, and every context rewrite. `verifyRun()` reads it back cold, offline, and checks that each block's named source event still reproduces it byte for byte; an evicted window is reported as inconclusive, not as a failure. It proves lineage and content, not that the file was never edited.
-
-[`journal/verify.ts`](packages/core/src/journal/verify.ts) · [`journal/hash.ts`](packages/core/src/journal/hash.ts) · [`verify-run.test.ts`](packages/core/tests/verify-run.test.ts) (11 cases) · [Guide](docs/run-journal.md)
+Enable a run journal to record model inputs, tool calls, and results for later inspection. `verifyRun()` checks the recorded sources and content for consistency offline; it does not prove the journal was never edited. [Guide](docs/run-journal.md)
 
 ## Governance floor
 
-Declare `governanceIntent: 'required'` with `requiredRoles`, and the run is judged on an execution receipt: which roles ran, in what order, with which dependency edges, and whether an independent review happened. The evaluator never sees agent output text, and a run can succeed and still report `unsatisfied`.
-
-[`orchestrator/governance.ts`](packages/core/src/orchestrator/governance.ts) · [`observability/execution-receipt.ts`](packages/core/src/observability/execution-receipt.ts) · [`governance-floor.test.ts`](packages/core/tests/governance-floor.test.ts) (16 cases) · [Guide](docs/tool-configuration.md#declared-governance-roles-in-runteam) · [Receipts](docs/observability.md#execution-receipts)
+Declare required roles and their execution order, then check whether the actual run met those requirements. A successful run can still leave governance requirements unmet, so applications must check `governanceConclusion` separately. [Guide](docs/tool-configuration.md#declared-governance-roles-in-runteam)
 
 ## Runs where you run
 
@@ -114,9 +109,9 @@ Declare `governanceIntent: 'required'` with `requiredRoles`, and the run is judg
 
 `open-multi-agent` launched 2026-04-01 under MIT. Known users and integrations to date:
 
-- **[temodar-agent](https://github.com/xeloxa/temodar-agent)** by [Ali Sünbül](https://github.com/xeloxa). WordPress security analysis platform running OMA's built-in tools (`bash`, `file_*`, `grep`) inside a Docker runtime. Confirmed production use. (~60 stars)
+- **[temodar-agent](https://github.com/xeloxa/temodar-agent)** by [Ali Sünbül](https://github.com/xeloxa). WordPress security analysis platform running OMA's built-in tools (`bash`, `file_*`, `grep`) inside a Docker runtime. Confirmed production use.
 - **[Mark Galyan](https://github.com/apollo-mg)** runs OMA fully offline on local quantized models, using the coordinator and context compaction to keep autonomous agent loops alive under tight VRAM limits. Contributor since the framework's first month.
-- **[Engram](https://www.engram-memory.com)**: "Git for AI memory." Syncs knowledge across agents instantly and flags conflicts. ([repo](https://github.com/Agentscreator/engram-memory), ~80 stars)
+- **[Engram](https://www.engram-memory.com)**: "Git for AI memory." Syncs knowledge across agents instantly and flags conflicts. ([repo](https://github.com/Agentscreator/engram-memory))
 
 <details>
 <summary>More users and integrations</summary>
@@ -149,32 +144,6 @@ Paid sponsors supporting `open-multi-agent`. Sponsorship does not affect technic
 ## Optional coordinator
 
 `runTeam()` decomposes a goal into a task graph across agents. One model call turns the goal into task specs with assignees and dependencies, a deterministic scheduler executes them, and a second call writes the final answer from the completed task outputs. The coordinator is never consulted mid-run, and the finished run is data you can read back. Use `runAgent()` or `runTasks()` when you already know the work.
-
-```typescript
-import { OpenMultiAgent } from '@open-multi-agent/core'
-
-const oma = new OpenMultiAgent({ defaultProvider: 'openai', defaultModel: 'gpt-5.4' })
-
-const team = oma.createTeam('research-team', {
-  name: 'research-team',
-  agents: [
-    { name: 'researcher', systemPrompt: 'Find the relevant facts.' },
-    { name: 'analyst', systemPrompt: 'Compare evidence and identify tradeoffs.' },
-  ],
-  sharedMemory: true,
-})
-
-const result = await oma.runTeam(team, 'Compare three approaches and recommend one.')
-
-// Nothing above declares a task graph. The coordinator planned one at runtime,
-// and the finished run is data you can read back.
-for (const task of result.tasks ?? []) {
-  console.log(`[${task.status}] ${task.title} → ${task.assignee ?? 'unassigned'}`, task.dependsOn)
-}
-
-console.log(result.agentResults.get('coordinator')?.output)
-console.log(result.totalTokenUsage)
-```
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/open-multi-agent/open-multi-agent/main/.github/brand/demo-dashboard-hero.gif" alt="OMA Run Viewer replaying a real run: task DAG and span waterfall views with per-task status, assignee, tokens, and tool calls" width="960" height="540" loading="lazy">
