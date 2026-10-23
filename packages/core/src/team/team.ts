@@ -257,6 +257,16 @@ export class Team {
       description: task.description,
       assignee: task.assignee,
       dependsOn: task.dependsOn ? [...task.dependsOn] : undefined,
+      memoryScope: task.memoryScope,
+      dependencyPayload: task.dependencyPayload,
+      maxRetries: task.maxRetries,
+      retryDelayMs: task.retryDelayMs,
+      retryBackoff: task.retryBackoff,
+      role: task.role,
+      priority: task.priority,
+      metadata: task.metadata,
+      requires: task.requires,
+      verify: task.verify,
     })
 
     // Preserve any non-default status (e.g. 'blocked') supplied by the caller.

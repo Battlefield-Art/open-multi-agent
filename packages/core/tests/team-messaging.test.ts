@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { MessageBus } from '../src/team/messaging.js'
 import { Team } from '../src/team/team.js'
-import type { AgentConfig, TeamConfig } from '../src/types.js'
+import type { AgentConfig, TaskMetadata, TeamConfig } from '../src/types.js'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -272,6 +272,67 @@ describe('Team', () => {
       expect(task.id).toBeDefined()
       expect(task.title).toBe('Do something')
       expect(team.getTasks()).toHaveLength(1)
+    })
+
+    it.each(['pending', 'completed'] as const)(
+      'preserves task options for a %s task',
+      (status) => {
+        const team = new Team(teamConfig())
+        const options = {
+          memoryScope: 'dependencies' as const,
+          dependencyPayload: 'structured' as const,
+          maxRetries: 3,
+          retryDelayMs: 40,
+          retryBackoff: 4,
+          role: 'document-review',
+          priority: 'high' as const,
+          metadata: { documentId: 'fixture-01', pageCount: 2 },
+          requires: { requiredCapabilities: ['document-review'] },
+          verify: { judges: [agent('reviewer')], maxRounds: 1 },
+        }
+        const task = team.addTask({
+          title: 'Review document',
+          description: 'Review the fixture document.',
+          status,
+          assignee: 'alice',
+          ...options,
+          ...(status === 'completed' ? { result: 'Reviewed.' } : {}),
+        })
+
+        expect(task).toMatchObject({ ...options, status, assignee: 'alice' })
+        expect(team.getTasks()[0]).toMatchObject({ ...options, status })
+        if (status === 'completed') expect(task.result).toBe('Reviewed.')
+      },
+    )
+
+    it('validates task metadata before adding it to the queue', () => {
+      const team = new Team(teamConfig())
+      const metadata = { documentPages: [1, 'two'] } as unknown as TaskMetadata
+
+      expect(() => team.addTask({
+        title: 'Read document',
+        description: 'Read the fixture document.',
+        status: 'pending',
+        metadata,
+      })).toThrow('must be homogeneous')
+      expect(team.getTasks()).toEqual([])
+    })
+
+    it('copies dependencies and generates task identity and timestamps', () => {
+      const team = new Team(teamConfig())
+      const parent = team.addTask({ title: 'Parent', description: 'First.', status: 'pending' })
+      const dependsOn = [parent.id]
+      const task = team.addTask({ title: 'Child', description: 'Next.', status: 'pending', dependsOn })
+      dependsOn.push('another-task')
+
+      expect(task.id).not.toBe(parent.id)
+      expect(task.createdAt).toBeInstanceOf(Date)
+      expect(task.updatedAt).toBeInstanceOf(Date)
+      expect(task.dependsOn).toEqual([parent.id])
+      expect(team.getTasks().find(saved => saved.id === task.id)).toMatchObject({
+        dependsOn: [parent.id],
+        status: 'blocked',
+      })
     })
 
     it('filters tasks by assignee', () => {
