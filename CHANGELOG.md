@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Fixed
+
+- `Team.addTask()` now forwards every task option it accepts to the task
+  factory, so retry settings, memory scope, dependency payload, role, priority,
+  metadata, capability requirements, and consensus verification are present on
+  the returned task and in the team's queue instead of only title, description,
+  assignee, and dependencies.
+- Malformed task metadata passed to `Team.addTask()` now fails `createTask()`'s
+  validation before the task enters the queue instead of being silently
+  dropped.
+
 ## 1.21.3 - 2026-10-16
 
 ### Fixed
