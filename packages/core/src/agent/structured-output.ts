@@ -7,6 +7,7 @@
 
 import { type ZodSchema } from 'zod'
 import { zodToJsonSchema } from '../tool/framework.js'
+import { formatValidationIssues } from '../utils/validation-issues.js'
 
 // ---------------------------------------------------------------------------
 // System-prompt instruction builder
@@ -117,8 +118,9 @@ export function validateOutput(schema: ZodSchema, data: unknown): unknown {
   if (result.success) {
     return result.data
   }
-  const issues = result.error.issues
-    .map(issue => `  - ${issue.path.length > 0 ? issue.path.join('.') : '(root)'}: ${issue.message}`)
-    .join('\n')
+  const issues = formatValidationIssues(result.error.issues, {
+    bullet: '-',
+    rootLabel: '(root)',
+  })
   throw new Error(`Output validation failed:\n${issues}`)
 }

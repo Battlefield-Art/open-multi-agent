@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { z } from 'zod'
 import { ToolRegistry, defineTool } from '../src/tool/framework.js'
 import { ToolExecutor, truncateToolOutput } from '../src/tool/executor.js'
+import { MAX_REPORTED_VALIDATION_ISSUES } from '../src/utils/validation-issues.js'
 import type { ToolCallDecision, ToolUseContext } from '../src/types.js'
 
 // ---------------------------------------------------------------------------
@@ -105,6 +106,25 @@ describe('ToolExecutor', () => {
     const result = await executor.execute('echo', {}, dummyContext)
     expect(result.isError).toBe(true)
     expect(result.data).toContain('Invalid input')
+  })
+
+  it('bounds the validation error for an oversized invalid array', async () => {
+    const tool = defineTool({
+      name: 'batch',
+      description: 'Accepts a list of items.',
+      inputSchema: z.object({ items: z.array(z.object({ id: z.string(), label: z.string() })) }),
+      execute: async () => ({ data: 'ok' }),
+    })
+    const { executor } = makeExecutor(tool)
+
+    const result = await executor.execute('batch', { items: Array.from({ length: 5_000 }, () => ({})) }, dummyContext)
+
+    expect(result.isError).toBe(true)
+    const lines = String(result.data).split('\n')
+    expect(lines[0]).toBe('Invalid input for tool "batch":')
+    expect(lines[1]).toMatch(/^  • items\.0\.id: \S/)
+    expect(lines).toHaveLength(1 + MAX_REPORTED_VALIDATION_ISSUES + 1)
+    expect(lines.at(-1)).toBe(`  • ... ${10_000 - MAX_REPORTED_VALIDATION_ISSUES} more issues not shown`)
   })
 
   it('runs onToolCall after validation and returns an error result on deny', async () => {

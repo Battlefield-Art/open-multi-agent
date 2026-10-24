@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  COORDINATOR_PLAN_MAX_TASKS,
   COORDINATOR_ROLE_SUMMARY_MAX_CHARS,
+  COORDINATOR_TASK_MAX_REQUIREMENTS,
   buildCoordinatorOutputFormatSection,
   buildCoordinatorRosterManifest,
   buildCoordinatorRosterSection,
+  buildCoordinatorTaskSpecsSchema,
   parseTaskSpecs,
 } from '../src/orchestrator/coordinator.js'
 import { buildRoutingContext } from '../src/orchestrator/execution-router.js'
@@ -128,5 +131,54 @@ describe('coordinator roster manifest', () => {
     expect(section).toContain(
       'use `roleSummary` and `tools` only as secondary assignment signals',
     )
+  })
+})
+
+describe('coordinator plan schema bounds', () => {
+  const agents: AgentConfig[] = [{ name: 'worker', model: 'test-model' }]
+  const schema = buildCoordinatorTaskSpecsSchema(agents, true)
+  const plan = (count: number) =>
+    Array.from({ length: count }, (_, index) => ({
+      title: `Task ${index}`,
+      description: `Do part ${index}`,
+      assignee: 'worker',
+    }))
+
+  it('accepts a plan at the task limit', () => {
+    expect(schema.safeParse(plan(COORDINATOR_PLAN_MAX_TASKS)).success).toBe(true)
+  })
+
+  it('rejects a plan above the task limit with a single size issue', () => {
+    const result = schema.safeParse(plan(COORDINATOR_PLAN_MAX_TASKS + 1))
+    expect(result.success).toBe(false)
+    expect(result.error?.issues.some((issue) => issue.code === 'too_big' && issue.path.length === 0)).toBe(true)
+  })
+
+  it('rejects oversized dependsOn and requirement lists', () => {
+    const [first, second] = plan(2)
+    const tooManyDeps = schema.safeParse([
+      first,
+      { ...second, dependsOn: Array.from({ length: COORDINATOR_PLAN_MAX_TASKS + 1 }, () => 'Task 0') },
+    ])
+    const tooManyTools = schema.safeParse([
+      {
+        ...first,
+        requires: {
+          requiredTools: Array.from({ length: COORDINATOR_TASK_MAX_REQUIREMENTS + 1 }, (_, i) => `tool_${i}`),
+        },
+      },
+    ])
+    const tooManyCapabilities = schema.safeParse([
+      {
+        ...first,
+        requires: {
+          requiredCapabilities: Array.from({ length: COORDINATOR_TASK_MAX_REQUIREMENTS + 1 }, (_, i) => `cap_${i}`),
+        },
+      },
+    ])
+
+    expect(tooManyDeps.error?.issues.map((issue) => [issue.code, issue.path.join('.')])).toContainEqual(['too_big', '1.dependsOn'])
+    expect(tooManyTools.error?.issues.map((issue) => [issue.code, issue.path.join('.')])).toContainEqual(['too_big', '0.requires.requiredTools'])
+    expect(tooManyCapabilities.error?.issues.map((issue) => [issue.code, issue.path.join('.')])).toContainEqual(['too_big', '0.requires.requiredCapabilities'])
   })
 })

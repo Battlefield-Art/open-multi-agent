@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Changed
+
+- Validation failures that reach the model now list at most 20 issues, each
+  cut to 500 characters, followed by a count of the rest. This covers tool
+  input and output validation, the structured-output corrective retry, and
+  `SharedMemory.write()` schema checks. An oversized invalid array used to
+  produce one line per invalid element, which could push the next request past
+  the model's context window.
+- Coordinator plans are capped at 200 tasks, `dependsOn` at 200 entries, and
+  `requires.requiredTools` and `requires.requiredCapabilities` at 64 entries
+  each. A plan over a cap fails validation like any other invalid plan.
+
 ## 1.22.0 - 2026-10-23
 
 ### Breaking changes

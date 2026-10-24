@@ -5,6 +5,7 @@ import { RedactingStore } from '../src/memory/redacting-store.js'
 import { InMemoryStore } from '../src/memory/store.js'
 import { Team } from '../src/team/team.js'
 import { APPROVAL_KEY_PREFIX } from '../src/approval/durable.js'
+import { MAX_REPORTED_VALIDATION_ISSUES } from '../src/utils/validation-issues.js'
 import type { MemoryEntry, MemoryStore } from '../src/types.js'
 
 describe('SharedMemory', () => {
@@ -151,6 +152,19 @@ describe('SharedMemory', () => {
       mem.write('agent', 'bad', { answer: 'nope' }, undefined, { schema }),
     ).rejects.toThrow(/schema validation/)
     expect(await mem.read('agent/bad')).toBeNull()
+  })
+
+  it('bounds the schema validation message for an oversized invalid array', async () => {
+    const mem = new SharedMemory()
+    const schema = z.array(z.object({ answer: z.number() }))
+    const write = mem.write('agent', 'bad', Array.from({ length: 5_000 }, () => ({})), undefined, { schema })
+
+    const error = await write.then(() => undefined, (reason: unknown) => reason as Error)
+    const lines = error!.message.split('\n')
+    expect(lines[0]).toBe('SharedMemory.write: value failed schema validation:')
+    expect(lines[1]).toMatch(/^  • 0\.answer: \S/)
+    expect(lines).toHaveLength(1 + MAX_REPORTED_VALIDATION_ISSUES + 1)
+    expect(lines.at(-1)).toBe(`  • ... ${5_000 - MAX_REPORTED_VALIDATION_ISSUES} more issues not shown`)
   })
 
   it('keeps the underlying MemoryStore boundary string-only for structured values', async () => {

@@ -73,6 +73,14 @@ export interface ParsedTaskSpec {
   verify?: ConsensusVerifyOptions | CoordinatorVerifySpec | true
 }
 
+/**
+ * Upper bounds on the arrays a coordinator plan may contain. They sit well
+ * above any useful plan and exist so validation work stays bounded when the
+ * model emits an oversized array.
+ */
+export const COORDINATOR_PLAN_MAX_TASKS = 200
+export const COORDINATOR_TASK_MAX_REQUIREMENTS = 64
+
 const coordinatorVerifySchema = z.union([
   z.literal(true),
   z.object({
@@ -87,7 +95,7 @@ const coordinatorTaskSpecSchema = z.object({
   title: z.string().trim().min(1),
   description: z.string().trim().min(1),
   assignee: z.string().trim().min(1).optional(),
-  dependsOn: z.array(z.string().trim().min(1)).optional(),
+  dependsOn: z.array(z.string().trim().min(1)).max(COORDINATOR_PLAN_MAX_TASKS).optional(),
   memoryScope: z.enum(['dependencies', 'all']).optional(),
   maxRetries: z.number().int().nonnegative().optional(),
   retryDelayMs: z.number().finite().nonnegative().optional(),
@@ -95,15 +103,17 @@ const coordinatorTaskSpecSchema = z.object({
   role: z.string().trim().min(1).optional(),
   priority: z.enum(['low', 'normal', 'high', 'critical']).optional(),
   requires: z.object({
-    requiredTools: z.array(z.string().trim().min(1)).optional(),
-    requiredCapabilities: z.array(z.string().trim().min(1)).optional(),
+    requiredTools: z.array(z.string().trim().min(1)).max(COORDINATOR_TASK_MAX_REQUIREMENTS).optional(),
+    requiredCapabilities: z.array(z.string().trim().min(1)).max(COORDINATOR_TASK_MAX_REQUIREMENTS).optional(),
     requiredBackend: z.enum(['llm', 'process', 'acp']).optional(),
     requiredProvider: z.string().trim().min(1).optional(),
   }).strict().optional(),
   verify: coordinatorVerifySchema.optional(),
 }).strict()
 
-const coordinatorTaskSpecsSchema = z.array(coordinatorTaskSpecSchema).min(1)
+const coordinatorTaskSpecsSchema = z.array(coordinatorTaskSpecSchema)
+  .min(1)
+  .max(COORDINATOR_PLAN_MAX_TASKS)
 
 /**
  * Build the coordinator output contract for one team. The roster and task

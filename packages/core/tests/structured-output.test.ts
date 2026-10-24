@@ -10,6 +10,7 @@ import { AgentRunner } from '../src/agent/runner.js'
 import { ToolRegistry } from '../src/tool/framework.js'
 import { ToolExecutor } from '../src/tool/executor.js'
 import { StructuredOutputValidationError } from '../src/errors.js'
+import { MAX_REPORTED_VALIDATION_ISSUES } from '../src/utils/validation-issues.js'
 import type { AgentConfig, ContentBlock, LLMAdapter, LLMResponse } from '../src/types.js'
 
 // ---------------------------------------------------------------------------
@@ -149,6 +150,22 @@ describe('validateOutput', () => {
   it('shows (root) for root-level errors', () => {
     const stringSchema = z.string()
     expect(() => validateOutput(stringSchema, 42)).toThrow('(root)')
+  })
+
+  it('bounds the error message for an oversized invalid array', () => {
+    const listSchema = z.array(z.object({ title: z.string(), score: z.number() }))
+    let message = ''
+    try {
+      validateOutput(listSchema, Array.from({ length: 5_000 }, () => ({})))
+    } catch (error) {
+      message = (error as Error).message
+    }
+
+    const lines = message.split('\n')
+    expect(lines[0]).toBe('Output validation failed:')
+    expect(lines[1]).toMatch(/^  - 0\.title: \S/)
+    expect(lines).toHaveLength(1 + MAX_REPORTED_VALIDATION_ISSUES + 1)
+    expect(lines.at(-1)).toBe(`  - ... ${10_000 - MAX_REPORTED_VALIDATION_ISSUES} more issues not shown`)
   })
 })
 

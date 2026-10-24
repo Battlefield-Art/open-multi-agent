@@ -18,6 +18,7 @@ import type {
 } from '../types.js'
 import { InMemoryStore } from './store.js'
 import { APPROVAL_KEY_PREFIX } from '../approval/durable.js'
+import { formatValidationIssues } from '../utils/validation-issues.js'
 
 // ---------------------------------------------------------------------------
 // Runtime shape check
@@ -422,9 +423,10 @@ export class SharedMemory {
     if (options?.schema) {
       const result = options.schema.safeParse(value)
       if (!result.success) {
-        const issues = result.error.issues
-          .map((issue) => `  • ${issue.path.join('.') || '<root>'}: ${issue.message}`)
-          .join('\n')
+        const issues = formatValidationIssues(result.error.issues, {
+          bullet: '•',
+          rootLabel: '<root>',
+        })
         throw new TypeError(`SharedMemory.write: value failed schema validation:\n${issues}`)
       }
       value = result.data as TValue

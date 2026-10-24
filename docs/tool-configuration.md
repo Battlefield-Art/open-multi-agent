@@ -572,7 +572,10 @@ primitives are exported from the package root for applications that wire an
   truncation. `maxConcurrency` defaults to `4` for batched calls, and
   `maxToolOutputChars` sets the agent-level truncation default. It never
   rejects: an unknown tool name, a validation failure, and a thrown tool error
-  all come back as a `ToolResult` with `isError: true`.
+  all come back as a `ToolResult` with `isError: true`. A validation failure
+  lists at most 20 issues, each cut to 500 characters, followed by a count of
+  the ones left out, so an oversized invalid array cannot flood the model's
+  context.
 
 ## Per-agent tool credentials
 
