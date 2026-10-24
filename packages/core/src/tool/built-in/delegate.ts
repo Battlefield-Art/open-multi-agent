@@ -21,7 +21,7 @@ const inputSchema = z.object({
  * {@link ToolResult.metadata} so the parent runner can aggregate it into its total
  * (keeps `maxTokenBudget` accurate across delegation chains).
  */
-export const delegateToAgentTool: ToolDefinition<z.infer<typeof inputSchema>> = {
+export const delegateToAgentTool: ToolDefinition<{ target_agent: string; prompt: string }> = {
   name: 'delegate_to_agent',
   description:
     'Run a sub-task on another agent from this team and return that agent\'s final answer as the tool result. ' +

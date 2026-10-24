@@ -10,8 +10,8 @@
  * who only need to import from `tool/framework`.
  */
 
-import { type ZodSchema } from 'zod'
 import type {
+  ZodSchema,
   ToolDefinition,
   ToolResult,
   ToolUseContext,
@@ -283,6 +283,8 @@ export function zodToJsonSchema(schema: ZodSchema): Record<string, unknown> {
 // Internal recursive converter.  We access Zod's internal `_def` structure
 // because Zod v3 does not ship a first-class JSON Schema exporter.
 function convertZodType(schema: ZodSchema): Record<string, unknown> {
+  if (isZod4Schema(schema)) return convertZod4Type(schema)
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const def = (schema as any)._def as ZodTypeDef
 
@@ -607,4 +609,155 @@ interface ZodCatchDef extends ZodTypeDef {
 
 interface ZodPipelineDef extends ZodTypeDef {
   in: ZodSchema
+}
+
+// ---------------------------------------------------------------------------
+// Zod 4 converter
+// ---------------------------------------------------------------------------
+
+// Zod 4 keeps its definition under `_zod.def` and names each type with a
+// lower-case string. The output mirrors the Zod 3 branch above, so the same
+// schema converts to the same JSON Schema whichever major version built it.
+
+interface Zod4Schema {
+  readonly _zod: {
+    readonly def: Zod4Def
+    /** Set when an object key holding this schema may be omitted. */
+    readonly optin?: 'optional' | 'defaulted'
+  }
+  /** Classic schemas read their description from Zod's global registry. */
+  readonly description?: string
+}
+
+interface Zod4Def {
+  readonly type: string
+  readonly element?: Zod4Schema
+  readonly items?: readonly Zod4Schema[]
+  readonly shape?: Readonly<Record<string, Zod4Schema>>
+  readonly valueType?: Zod4Schema
+  readonly innerType?: Zod4Schema
+  readonly options?: readonly Zod4Schema[]
+  readonly left?: Zod4Schema
+  readonly right?: Zod4Schema
+  readonly in?: Zod4Schema
+  readonly out?: Zod4Schema
+  readonly values?: readonly unknown[]
+  readonly entries?: Readonly<Record<string, unknown>>
+  readonly defaultValue?: unknown
+}
+
+function isZod4Schema(schema: unknown): schema is Zod4Schema {
+  return typeof schema === 'object' && schema !== null && '_zod' in schema
+}
+
+function convertZod4Type(schema: Zod4Schema): Record<string, unknown> {
+  const def = schema._zod.def
+  const description = schema.description
+
+  const withDesc = (result: Record<string, unknown>): Record<string, unknown> =>
+    description !== undefined ? { ...result, description } : result
+
+  switch (def.type) {
+    case 'string':
+      return withDesc({ type: 'string' })
+
+    case 'number':
+      return withDesc({ type: 'number' })
+
+    case 'bigint':
+      return withDesc({ type: 'integer' })
+
+    case 'boolean':
+      return withDesc({ type: 'boolean' })
+
+    case 'null':
+    case 'undefined':
+    case 'void':
+      return withDesc({ type: 'null' })
+
+    case 'date':
+      return withDesc({ type: 'string', format: 'date-time' })
+
+    case 'literal': {
+      const values = def.values!
+      return withDesc(values.length === 1 ? { const: values[0] } : { enum: [...values] })
+    }
+
+    // `z.enum()` covers both string tuples and native enum objects in Zod 4.
+    case 'enum': {
+      const values = Object.values(def.entries!).filter(
+        (v) => typeof v === 'string' || typeof v === 'number',
+      )
+      return withDesc(
+        values.every((v) => typeof v === 'string')
+          ? { type: 'string', enum: values }
+          : { enum: values },
+      )
+    }
+
+    case 'array':
+      return withDesc({ type: 'array', items: convertZod4Type(def.element!) })
+
+    case 'tuple':
+      return withDesc({ type: 'array', prefixItems: def.items!.map(convertZod4Type) })
+
+    // A key is required unless Zod accepts the object without it, which Zod 4
+    // records as `optin`. Zod 3.25's bundled `zod/v4` also accepts a missing
+    // `z.any()` or `z.unknown()` key without setting `optin`; those keys are
+    // listed as required, which a valid model call always satisfies.
+    case 'object': {
+      const properties: Record<string, unknown> = {}
+      const required: string[] = []
+      for (const [key, value] of Object.entries(def.shape!)) {
+        properties[key] = convertZod4Type(value)
+        if (value._zod.optin === undefined) required.push(key)
+      }
+      const result: Record<string, unknown> = { type: 'object', properties }
+      if (required.length > 0) result.required = required
+      return withDesc(result)
+    }
+
+    case 'record':
+      return withDesc({ type: 'object', additionalProperties: convertZod4Type(def.valueType!) })
+
+    case 'optional':
+    case 'readonly':
+    case 'catch':
+      return withDesc(convertZod4Type(def.innerType!))
+
+    case 'nullable': {
+      const inner = convertZod4Type(def.innerType!)
+      const type = inner.type
+      if (typeof type === 'string') {
+        return withDesc({ ...inner, type: [type, 'null'] })
+      }
+      return withDesc({ anyOf: [inner, { type: 'null' }] })
+    }
+
+    case 'default':
+    case 'prefault':
+      return withDesc({ ...convertZod4Type(def.innerType!), default: def.defaultValue })
+
+    // Discriminated unions are `union` in Zod 4.
+    case 'union':
+      return withDesc({ anyOf: def.options!.map(convertZod4Type) })
+
+    case 'intersection':
+      return withDesc({ allOf: [convertZod4Type(def.left!), convertZod4Type(def.right!)] })
+
+    // `.transform()` is a pipe into a transform and `z.preprocess()` is a pipe
+    // out of one; either way the model-facing shape is the non-transform side.
+    case 'pipe':
+      return withDesc(convertZod4Type(def.in!._zod.def.type === 'transform' ? def.out! : def.in!))
+
+    case 'any':
+    case 'unknown':
+      return withDesc({})
+
+    case 'never':
+      return withDesc({ not: {} })
+
+    default:
+      return withDesc({})
+  }
 }

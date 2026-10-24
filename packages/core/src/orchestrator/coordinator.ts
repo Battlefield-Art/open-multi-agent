@@ -21,6 +21,7 @@ import type {
   TaskMetadata,
   TaskRequirements,
   TokenUsage,
+  ZodSchema,
 } from '../types.js'
 import type { Team } from '../team/team.js'
 import type { TaskQueue } from '../task/queue.js'
@@ -123,7 +124,7 @@ const coordinatorTaskSpecsSchema = z.array(coordinatorTaskSpecSchema)
 export function buildCoordinatorTaskSpecsSchema(
   agents: readonly AgentConfig[],
   strictAssignees: boolean,
-) {
+): ZodSchema {
   const roster = new Set(agents.map((agent) => agent.name))
   const normalizeTitle = (title: string) => title.toLowerCase().trim()
 

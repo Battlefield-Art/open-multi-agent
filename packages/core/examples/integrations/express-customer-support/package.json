@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@open-multi-agent/core": "file:../../..",
-    "zod": "^3.23.0"
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "@types/express": "^4.17.0",

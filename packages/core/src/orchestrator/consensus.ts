@@ -8,7 +8,6 @@
  * folding judge usage into the run's cumulative budget.
  */
 
-import type { ZodSchema } from 'zod'
 import type {
   AgentConfig,
   AgentRunResult,
@@ -17,6 +16,7 @@ import type {
   RunIdentity,
   Task,
   TokenUsage,
+  ZodSchema,
 } from '../types.js'
 import { AgentPool } from '../agent/pool.js'
 import type { Team } from '../team/team.js'

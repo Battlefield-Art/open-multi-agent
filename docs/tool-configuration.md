@@ -551,7 +551,8 @@ primitives are exported from the package root for applications that wire an
 `Agent` by hand or build their own tool plumbing.
 
 - **`defineTool(config)`** returns a `ToolDefinition`. Required: `name`,
-  `description`, `inputSchema` (a Zod schema), and
+  `description`, `inputSchema` (a Zod 3 schema or a Zod 4 classic schema;
+  `zod/mini` schemas are not accepted), and
   `execute(input, context) => Promise<ToolResult>`. Optional: `consequential`,
   `outputSchema` (validates `ToolResult.data` on non-error results),
   `llmInputSchema` (a hand-written JSON Schema that replaces Zod conversion for
@@ -564,8 +565,10 @@ primitives are exported from the package root for applications that wire an
   `toRuntimeToolDefs()` returns only the runtime-added subset, which is how
   grant resolution knows which tools skip the allowlist.
 - **`zodToJsonSchema(schema)`** performs that Zod to JSON Schema conversion.
-  `toToolDefs()` calls it whenever a tool has no `llmInputSchema`. Zod types it
-  does not model fall back to `{}`, which is still valid JSON Schema; supply
+  `toToolDefs()` calls it whenever a tool has no `llmInputSchema`. Zod 3 and
+  Zod 4 schemas follow the same conversion rules, and a key is listed as
+  required whenever Zod rejects the object without it. Zod types it does not
+  model fall back to `{}`, which is still valid JSON Schema; supply
   `llmInputSchema` when a schema needs to reach the model exactly as written.
 - **`ToolExecutor(registry, options)`** runs the calls: Zod input validation,
   then the `onToolCall` gate, then `execute`, then `outputSchema` validation and

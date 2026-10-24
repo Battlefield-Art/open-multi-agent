@@ -17,6 +17,7 @@ import type {
   TaskProfilerResult,
   TextBlock,
   TokenUsage,
+  ZodSchema,
 } from '../types.js'
 import {
   buildStructuredOutputInstruction,
@@ -44,7 +45,7 @@ const rawTaskProfileSchema = z.object({
     .max(MAX_PROFILE_REASONS),
 }).strict()
 
-export const taskProfileSchema = rawTaskProfileSchema.extend({
+export const taskProfileSchema: ZodSchema<TaskProfile> = rawTaskProfileSchema.extend({
   source: z.literal('inferred'),
 }).strict()
 

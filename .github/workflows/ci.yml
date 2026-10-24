@@ -40,6 +40,8 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
       - run: npm test
+      - name: Re-run core tests with zod resolved to the Zod 3 API
+        run: npm run test:zod3 -w @open-multi-agent/core
 
   coverage:
     runs-on: ubuntu-latest
@@ -133,6 +135,19 @@ jobs:
             done
           done
           test "$fail" -eq 0
+
+      - name: Assert published core declarations do not import the root zod entry
+        run: |
+          set -euo pipefail
+          # zod is a peer that resolves to Zod 3 or Zod 4 depending on the
+          # consumer. A declaration that imports `zod` directly carries the
+          # build-time major's types to every consumer, so public types go
+          # through the `zod/v3` and `zod/v4` subpaths that both majors ship.
+          leaks=$(grep -rlE "^import .* from ['\"]zod['\"]|import\(['\"]zod['\"]\)" packages/core/dist --include='*.d.ts' || true)
+          if [ -n "$leaks" ]; then
+            echo "::error::These declarations import the root zod entry: $leaks"
+            exit 1
+          fi
 
       - name: Typecheck the create-oma-app template against core
         run: npm run typecheck:template -w create-oma-app

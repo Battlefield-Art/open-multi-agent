@@ -1,5 +1,5 @@
-import { z, type ZodSchema } from 'zod'
-import type { AgentConfig, AgentRunInput, CostEstimateContext, TokenUsage } from '../types.js'
+import { z } from 'zod'
+import type { AgentConfig, AgentRunInput, CostEstimateContext, TokenUsage, ZodSchema } from '../types.js'
 import {
   buildStructuredOutputInstruction,
   extractJSON,

@@ -1,5 +1,6 @@
 import { z } from 'zod'
 
+import type { ZodSchema } from '../types.js'
 import type { EvalRunReport, ScorerAggregate } from './report.js'
 
 export type GateMetric = 'avg' | 'p50' | 'p95' | 'min' | 'passRate'
@@ -84,14 +85,14 @@ const gateThresholdSchema = z.object({
 })
 
 /** @internal Shared by the Node-only GatePolicy loader. */
-export const gatePolicySchema = z.object({
+export const gatePolicySchema: ZodSchema<GatePolicy> = z.object({
   schemaVersion: z.literal(1),
   thresholds: z.array(gateThresholdSchema),
   maxScorerErrorRate: unitInterval.optional(),
   maxTargetErrorRate: unitInterval.optional(),
   baseline: z.object({
     maxRegression: unitInterval.optional(),
-    perScorer: z.record(unitInterval).optional(),
+    perScorer: z.record(z.string(), unitInterval).optional(),
     allowSetMismatch: z.boolean().optional(),
   }).optional(),
 })

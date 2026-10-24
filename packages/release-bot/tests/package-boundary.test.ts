@@ -15,7 +15,7 @@ describe('release bot package boundary', () => {
     expect(manifest.publishConfig).toBeUndefined()
     expect(manifest.dependencies).toEqual({
       '@open-multi-agent/core': '*',
-      zod: '3.25.76',
+      zod: '4.6.7',
     })
   })
 })

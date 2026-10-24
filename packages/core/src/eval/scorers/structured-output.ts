@@ -1,4 +1,4 @@
-import type { ZodSchema } from 'zod'
+import type { ZodSchema } from '../../types.js'
 import { defineScorer, type Scorer } from '../scorer.js'
 
 /** Score whether an Agent result contains structured output and optionally matches a schema. */

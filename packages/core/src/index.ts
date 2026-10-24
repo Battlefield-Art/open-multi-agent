@@ -456,6 +456,7 @@ export type {
   EgressPolicy,
 
   // Tools
+  ZodSchema,
   ToolDefinition,
   ToolResult,
   ToolResultMetadata,

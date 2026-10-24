@@ -5,7 +5,8 @@
  * import only what they need, keeping the dependency graph acyclic.
  */
 
-import type { ZodSchema } from 'zod'
+import type * as z3 from 'zod/v3'
+import type * as z4 from 'zod/v4'
 import type { RunJournalConfig } from './journal/journal.js'
 import type { RunStoreConfig } from './run/ledger.js'
 import type { RunStore } from './run/store.js'
@@ -15,6 +16,18 @@ import type {
   SchedulingWeights,
 } from './orchestrator/scheduler.js'
 import type { ShellExecutor } from './tool/shell/types.js'
+
+// ---------------------------------------------------------------------------
+// Zod schemas
+// ---------------------------------------------------------------------------
+
+/**
+ * A Zod schema from either supported major version: a Zod 3 schema, or a
+ * Zod 4 classic schema (`zod` on Zod 4, `zod/v4` on Zod 3.25). Schemas from
+ * `zod/mini` are not accepted.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type ZodSchema<T = any> = z3.ZodType<T, z3.ZodTypeDef, any> | z4.ZodType<T, any>
 
 // ---------------------------------------------------------------------------
 // Content blocks

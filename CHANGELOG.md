@@ -2,8 +2,25 @@
 
 ## Unreleased
 
+### Added
+
+- Zod 4 support. Tool `inputSchema` and `outputSchema`, `AgentConfig.outputSchema`,
+  judge `verdictSchema`, and `SharedMemory.write()` schemas accept Zod 4 classic
+  schemas alongside Zod 3, and `zodToJsonSchema()` converts both with the same
+  rules. A Zod 4 schema previously converted to `{}`, so the model saw a tool
+  with no parameters.
+
 ### Changed
 
+- `zod` moved from `dependencies` to a required peer dependency with the range
+  `^3.25.0 || ^4.6.6`. npm installs required peers automatically; with other
+  package managers, add `zod` to your own dependencies. Zod releases before
+  3.25 are no longer supported.
+- `taskProfileSchema` and `gatePolicySchema` are now typed as
+  `ZodSchema<TaskProfile>` and `ZodSchema<GatePolicy>`, so the published
+  declarations no longer depend on the Zod major core was built with. Code
+  that called object-only methods such as `.extend()` on them needs its own
+  schema.
 - Validation failures that reach the model now list at most 20 issues, each
   cut to 500 characters, followed by a count of the rest. This covers tool
   input and output validation, the structured-output corrective retry, and
@@ -13,6 +30,12 @@
 - Coordinator plans are capped at 200 tasks, `dependsOn` at 200 entries, and
   `requires.requiredTools` and `requires.requiredCapabilities` at 64 entries
   each. A plan over a cap fails validation like any other invalid plan.
+
+### Security
+
+- Applications can now upgrade to zod 4.6.6 or later, the first release that
+  fixes GHSA-mrhx-c7xc-m3w5 (memory exhaustion from oversized arrays). Core
+  previously required Zod 3, which has no fixed release.
 
 ## 1.22.0 - 2026-10-23
 

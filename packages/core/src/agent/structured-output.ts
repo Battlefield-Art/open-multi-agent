@@ -5,7 +5,7 @@
  * that agents can return typed, schema-validated output.
  */
 
-import { type ZodSchema } from 'zod'
+import type { ZodSchema } from '../types.js'
 import { zodToJsonSchema } from '../tool/framework.js'
 import { formatValidationIssues } from '../utils/validation-issues.js'
 

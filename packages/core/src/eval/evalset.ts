@@ -16,7 +16,7 @@ const evalCaseSchema = z.object({
   input: z.unknown(),
   expected: z.unknown().optional(),
   tags: z.array(z.string()).optional(),
-  metadata: z.record(traceAttributeValueSchema).optional(),
+  metadata: z.record(z.string(), traceAttributeValueSchema).optional(),
 })
 
 const evalSetSchema = z.object({

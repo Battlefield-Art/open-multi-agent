@@ -89,14 +89,14 @@ const evalRecordSchema = z.object({
   score: z.number().finite().min(0).max(1).optional(),
   pass: z.boolean().optional(),
   reason: z.string().optional(),
-  details: z.record(traceAttributeValueSchema).optional(),
+  details: z.record(z.string(), traceAttributeValueSchema).optional(),
   runRef: z.object({
     runId: z.string().trim().min(1),
     attempt: z.number().int().positive(),
     traceId: z.string().trim().min(1),
     rootSpanId: z.string().trim().min(1),
   }).optional(),
-  metadata: z.record(traceAttributeValueSchema),
+  metadata: z.record(z.string(), traceAttributeValueSchema),
   usage: z.object({
     tokens: tokenUsageSchema.optional(),
     cost: costSchema.optional(),
@@ -121,7 +121,7 @@ const scorerAggregateSchema: z.ZodTypeAny = z.lazy(() => z.object({
   max: z.number().finite().min(0).max(1),
   passRate: z.number().finite().min(0).max(1).optional(),
   passSampleCount: z.number().int().nonnegative().optional(),
-  byTag: z.record(scorerAggregateSchema).optional(),
+  byTag: z.record(z.string(), scorerAggregateSchema).optional(),
 }))
 
 const evalRunReportSchema = z.object({
@@ -133,7 +133,7 @@ const evalRunReportSchema = z.object({
     name: z.string().trim().min(1),
     version: z.string().trim().min(1),
   }),
-  metadata: z.record(traceAttributeValueSchema),
+  metadata: z.record(z.string(), traceAttributeValueSchema),
   caseCount: z.number().int().nonnegative(),
   repeats: z.number().int().positive(),
   aborted: z.boolean().optional(),

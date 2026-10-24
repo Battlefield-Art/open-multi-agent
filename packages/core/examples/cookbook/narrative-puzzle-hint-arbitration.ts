@@ -75,7 +75,7 @@ const MechanicAudit = z.object({
   source_is_mock: z.boolean(),
   room: z.string(),
   inventory: z.array(z.string()),
-  scene_flags: z.record(z.boolean()),
+  scene_flags: z.record(z.string(), z.boolean()),
   puzzle_states: z.array(z.object({
     puzzle_id: z.string(),
     status: z.enum(['solved', 'partial', 'unsolved']),

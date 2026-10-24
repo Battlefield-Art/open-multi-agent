@@ -67,6 +67,7 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "test": "vitest run",
+    "test:zod3": "vitest run -c vitest.zod3.config.ts",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "lint": "tsc --noEmit -p tsconfig.lint.json",
@@ -107,15 +108,15 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",
-    "openai": "^6.49.0",
-    "zod": "^3.23.0"
+    "openai": "^6.49.0"
   },
   "peerDependencies": {
     "@agentclientprotocol/sdk": "^1.2.0",
     "@aws-sdk/client-bedrock-runtime": "^3.700.0",
     "@google/genai": "^1.48.0",
     "@modelcontextprotocol/sdk": "^1.18.0",
-    "ai": "^5.0.0 || ^6.0.0 || ^7.0.0"
+    "ai": "^5.0.0 || ^6.0.0 || ^7.0.0",
+    "zod": "^3.25.0 || ^4.6.6"
   },
   "peerDependenciesMeta": {
     "@agentclientprotocol/sdk": {
@@ -146,6 +147,7 @@
     "ai": "7.0.47",
     "tsx": "4.21.0",
     "typescript": "5.9.3",
-    "vitest": "2.1.9"
+    "vitest": "2.1.9",
+    "zod": "4.6.7"
   }
 }
